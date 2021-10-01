@@ -28,8 +28,11 @@ from ta.utils import IndicatorMixin
 from typing_extensions import Type
 
 from infertrade.PandasEnum import PandasEnum
+import pandas as pd
 
 # Hardcoded settings
+from infertrade.algos.community import scikit_signal_factory
+
 DEFAULT_VALUE_FOR_MISSING_DEFAULTS = 10
 
 
@@ -975,5 +978,26 @@ ta_export_signals = {
     },
 }
 
-ta_export_allocations = {}
+
+def create_regressions_of_signals():
+    """Regresses technical signals against price changes to create allocation rules."""
+    from copy import deepcopy
+    ta_allocation_rules = {}
+    for ii_signal in ta_export_signals:
+        copied_allocation = deepcopy(ta_allocation_rules)
+        copied_allocation["function_names"] = "Regression of " + ta_allocation_rules["function_names"]
+
+        def wrapped_rule(df: pd.DataFrame, *args, **kwargs):
+            """Creates an allocation rule from regression of a signal."""
+            adapted_allocation_rule = ta_adaptor(ta_allocation_rules["class"], ta_allocation_rules["function_name"], *args, **kwargs)
+            signal_transformer = scikit_signal_factory(adapted_allocation_rule)
+            return signal_transformer.fit_transform(df)
+
+        copied_allocation["class"] = wrapped_rule
+        ta_allocation_rules[ii_signal] = copied_allocation
+
+    return ta_allocation_rules
+
+
+ta_export_allocations = create_regressions_of_signals()
 ta_export = {PandasEnum.SIGNAL.value: ta_export_signals, PandasEnum.ALLOCATION.value: ta_export_allocations}
