@@ -19,6 +19,8 @@ Functions to facilitate usage of TA functionality with infertrade's interface.
 """
 
 import inspect
+
+from sklearn.pipeline import make_pipeline
 from ta.momentum import *
 from ta.trend import *
 from ta.volatility import *
@@ -32,6 +34,7 @@ import pandas as pd
 
 # Hardcoded settings
 from infertrade.algos.community import scikit_signal_factory
+from infertrade.utilities.operations import PricePredictionFromSignalRegression, PositionsFromPricePrediction
 
 DEFAULT_VALUE_FOR_MISSING_DEFAULTS = 10
 
@@ -990,8 +993,13 @@ def create_regressions_of_signals():
         def wrapped_rule(df: pd.DataFrame, *args, **kwargs):
             """Creates an allocation rule from regression of a signal."""
             adapted_allocation_rule = ta_adaptor(ta_allocation_rules["class"], ta_allocation_rules["function_name"], *args, **kwargs)
-            signal_transformer = scikit_signal_factory(adapted_allocation_rule)
-            return signal_transformer.fit_transform(df)
+
+            pipeline = make_pipeline(
+                scikit_signal_factory(adapted_allocation_rule),
+                PricePredictionFromSignalRegression(),
+                PositionsFromPricePrediction(),
+            )
+            return pipeline.fit_transform(df)
 
         copied_allocation["class"] = wrapped_rule
         ta_allocation_rules[ii_signal] = copied_allocation
